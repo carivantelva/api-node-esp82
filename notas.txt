@@ -1,0 +1,22 @@
+este proyecto se subio (hice el deploy  a render)
+pagina render:
+https://dashboard.render.com
+
+url proyecto : url https://api-node-esp82.onrender.com
+
+me autentique con hithub
+
+segui este video para hacer el deploy:
+
+https://www.youtube.com/watch?v=vpCi7fgsa6E
+
+que hace este proyecto : usando el esp8266. utilizando un sensor de temperatura
+ DHT11 CONECTADO AL PIN D4 y 
+un Led conectado al pin D2
+el cual envia los datos a la pagina de humedad y temperatura , desde la aplicacion 
+se puede encender y apagar el led.
+
+en el monitor serie , se puede ver la respuesta de la aplicacion como los valores 
+que esta enviando
+ a la pagina, tambien se ve el estado 
+que se encuentra en esos momentos el led
