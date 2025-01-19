@@ -1,21 +1,18 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
-const mqtt = require('mqtt'); // Importar MQTT
+const mqtt = require('mqtt');
 
 const app = express();
-const port = 3000;
 
-// Configuración de body-parser para manejar los datos JSON
-app.use(bodyParser.json());
+// Configuración del puerto: Render asignará el puerto automáticamente en la variable de entorno PORT
+const port = process.env.PORT || 3000;
 
-// Servir archivos estáticos (HTML, CSS, JS)
-app.use(express.static(path.join(__dirname, 'public')));
+// Configuración del broker MQTT: Usar variable de entorno o localhost por defecto
+const mqttBroker = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
+const mqttClient = mqtt.connect(mqttBroker);
 
-// Conectar al broker Mosquitto (puedes cambiar localhost por la IP del broker)
-const mqttClient = mqtt.connect('mqtt://localhost:1883');
-
-// Variables globales para el estado del LED y los datos de los sensores
+// Variables globales para almacenar el estado del LED y los datos de los sensores
 let ledStatus = false; // LED apagado por defecto
 let sensorData = {
     temperature: 0,
@@ -25,9 +22,9 @@ let sensorData = {
 
 // Conexión al broker MQTT
 mqttClient.on('connect', () => {
-    console.log('Conectado al broker MQTT');
+    console.log(`Conectado al broker MQTT en ${mqttBroker}`);
 
-    // Suscribirse a un tópico (opcional)
+    // Suscribirse al tópico para el estado del LED (opcional)
     mqttClient.subscribe('esp8266/ledStatus', (err) => {
         if (!err) {
             console.log('Suscrito al tópico esp8266/ledStatus');
@@ -35,16 +32,22 @@ mqttClient.on('connect', () => {
     });
 });
 
-// Escuchar mensajes MQTT
+// Escuchar mensajes entrantes del broker MQTT
 mqttClient.on('message', (topic, message) => {
     console.log(`Mensaje recibido en el tópico ${topic}: ${message.toString()}`);
 
-    // Actualizar el estado del LED si llega un mensaje
+    // Actualizar el estado del LED si el mensaje proviene del tópico correspondiente
     if (topic === 'esp8266/ledStatus') {
         ledStatus = message.toString() === 'on';
         console.log(`Estado del LED actualizado desde MQTT: ${ledStatus ? 'Encendido' : 'Apagado'}`);
     }
 });
+
+// Configuración de body-parser para manejar los datos JSON
+app.use(bodyParser.json());
+
+// Servir archivos estáticos (HTML, CSS, JS)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Ruta para recibir los datos del sensor (POST)
 app.post('/data', (req, res) => {
@@ -57,7 +60,7 @@ app.post('/data', (req, res) => {
 
     console.log('Datos recibidos:', sensorData);
 
-    // Publicar los datos en un tópico MQTT
+    // Publicar los datos del sensor en un tópico MQTT
     mqttClient.publish('esp8266/sensorData', JSON.stringify(sensorData));
 
     res.status(200).send({ message: 'Datos recibidos correctamente' });
@@ -72,6 +75,7 @@ app.get('/led', (req, res) => {
 app.post('/led', (req, res) => {
     const { status } = req.body;
     if (status === 'toggle') {
+        // Alternar el estado del LED
         ledStatus = !ledStatus;
 
         // Publicar el nuevo estado del LED en un tópico MQTT
@@ -89,5 +93,5 @@ app.get('/data', (req, res) => {
 
 // Iniciar el servidor
 app.listen(port, () => {
-    console.log(`Servidor escuchando en http://localhost:${port}`);
+    console.log(`Servidor escuchando en el puerto ${port}`);
 });
