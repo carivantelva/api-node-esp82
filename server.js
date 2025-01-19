@@ -1,6 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const mqtt = require('mqtt'); // Importar MQTT
+
 const app = express();
 const port = 3000;
 
@@ -10,13 +12,39 @@ app.use(bodyParser.json());
 // Servir archivos estáticos (HTML, CSS, JS)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Variables globales para almacenar el estado del LED y los datos de los sensores
-let ledStatus = false;  // LED apagado por defecto
+// Conectar al broker Mosquitto (puedes cambiar localhost por la IP del broker)
+const mqttClient = mqtt.connect('mqtt://localhost:1883');
+
+// Variables globales para el estado del LED y los datos de los sensores
+let ledStatus = false; // LED apagado por defecto
 let sensorData = {
     temperature: 0,
     humidity: 0,
     gasLevel: 0
 };
+
+// Conexión al broker MQTT
+mqttClient.on('connect', () => {
+    console.log('Conectado al broker MQTT');
+
+    // Suscribirse a un tópico (opcional)
+    mqttClient.subscribe('esp8266/ledStatus', (err) => {
+        if (!err) {
+            console.log('Suscrito al tópico esp8266/ledStatus');
+        }
+    });
+});
+
+// Escuchar mensajes MQTT
+mqttClient.on('message', (topic, message) => {
+    console.log(`Mensaje recibido en el tópico ${topic}: ${message.toString()}`);
+
+    // Actualizar el estado del LED si llega un mensaje
+    if (topic === 'esp8266/ledStatus') {
+        ledStatus = message.toString() === 'on';
+        console.log(`Estado del LED actualizado desde MQTT: ${ledStatus ? 'Encendido' : 'Apagado'}`);
+    }
+});
 
 // Ruta para recibir los datos del sensor (POST)
 app.post('/data', (req, res) => {
@@ -29,13 +57,14 @@ app.post('/data', (req, res) => {
 
     console.log('Datos recibidos:', sensorData);
 
-    // Responder al ESP8266 con un mensaje de éxito
+    // Publicar los datos en un tópico MQTT
+    mqttClient.publish('esp8266/sensorData', JSON.stringify(sensorData));
+
     res.status(200).send({ message: 'Datos recibidos correctamente' });
 });
 
 // Ruta para obtener el estado del LED (GET)
 app.get('/led', (req, res) => {
-    // Enviar el estado del LED como respuesta
     res.status(200).send(ledStatus ? 'true' : 'false');
 });
 
@@ -43,8 +72,10 @@ app.get('/led', (req, res) => {
 app.post('/led', (req, res) => {
     const { status } = req.body;
     if (status === 'toggle') {
-        // Alternar el estado del LED
         ledStatus = !ledStatus;
+
+        // Publicar el nuevo estado del LED en un tópico MQTT
+        mqttClient.publish('esp8266/ledStatus', ledStatus ? 'on' : 'off');
     }
 
     console.log('Estado del LED actualizado:', ledStatus ? 'Encendido' : 'Apagado');
@@ -53,12 +84,8 @@ app.post('/led', (req, res) => {
 
 // Ruta para obtener los datos del sensor (GET)
 app.get('/data', (req, res) => {
-    // Enviar los datos de los sensores como respuesta
     res.status(200).json(sensorData);
 });
-
-
-
 
 // Iniciar el servidor
 app.listen(port, () => {
